@@ -11,10 +11,10 @@ Main Usage:
 
 ![MainUsage](readmeimage2.png)
 
-##### Requirements:
+#### Requirements:
 Python 3
 pip install pystray, psutil, winsound
-##### Install:
+#### Install:
 
 A. List existing power schemas by call:```powercfg -list ``` in cmd shell or Windows PowerShell. Check schema names.
 
@@ -35,7 +35,7 @@ Test autoswitch of schemas by launching and stopping application, specified on [
 
 E. Open windows scheduler, create new task with trigger: logon, and action: start program from previous step.
 
-##### Config example:
+#### Config example:
 powercfg -list:
 * GUID схемы питания: 381b4222-f694-41f0-9685-ff5bb260df2e  (Сбалансированная) *
 * GUID схемы питания: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (Высокая производительность)
@@ -48,7 +48,7 @@ Translated to [Plans] section:
 
 (Экон = Economy, Сбал = Balanced, Высок = Performance) in russian
 
-##### Issues:
+#### Issues:
 Config file location is set up in line 18: ```config.read(sys.path[0] + '\powerplan.cfg') #```
 
 Font set up in file 'powerplan_image.py', line 51
