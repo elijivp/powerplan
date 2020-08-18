@@ -3,13 +3,13 @@ power management for windows (through powercfg shell command) via system tray.
 
 Overview:
 
-![Overview](demoimages/rdim1.png)
+![Overview](readmeimage1.png)
 
 This tool allow manually switch existing power plans and AUTO switch power plans by autochecking launched applications.
 
 Main Usage:
 
-![MainUsage](demoimages/rdim2.png)
+![MainUsage](readmeimage2.png)
 
 ##### Requirements:
 Python 3
