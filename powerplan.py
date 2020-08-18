@@ -1,6 +1,4 @@
-#!python
-# pip install pystray
-# pip install psutil
+# Author; Elijah
 
 from pystray import Icon, Menu as menu, MenuItem as item
 import threading
@@ -23,15 +21,18 @@ try:
   CFG.timestep = float(confgeneral['timestep'])
   if CFG.timestep < 0.1:
     raise BaseException("Timestep must be greatequal 100ms")
-  CFG.autoplan = int(confgeneral['autoplan'])
-  CFG.autoplanname = confgeneral['autoname']
-  CFG.ignoreplanname = confgeneral['ignorename']
-  CFG.namesignal = confgeneral['namesignal']
-  CFG.namegames = confgeneral['namegames']
-  CFG.nameplans = confgeneral['nameplans']
-  CFG.namepoweroff = confgeneral['namepoweroff']
-  CFG.nameexit = confgeneral['nameexit']
-  CFG.minutes = confgeneral['minutes']
+  CFG.index_autoplan = int(confgeneral['index_autoplan'])
+  CFG.caption_autoplan = confgeneral['caption_autoplan']
+  CFG.caption_ignoreplans = confgeneral['caption_ignoreplans']
+  CFG.caption_signal = confgeneral['caption_signal']
+  CFG.caption_games = confgeneral['caption_apps']
+  CFG.caption_plans = confgeneral['caption_plans']
+  CFG.caption_poweroff = confgeneral['caption_poweroff']
+  CFG.caption_exit = confgeneral['caption_exit']
+  CFG.caption_now = confgeneral['caption_now']
+  CFG.caption_minutes = confgeneral['caption_minutes']
+  CFG.beeptime = (int(confgeneral['beeptime_hour']), int(confgeneral['beeptime_minute']))
+  CFG.beepfile = sys.path[0] + '\\' + confgeneral['beeptime_wavfile']
 
   CFG.plans = []
   for kk in config['Plans']:
@@ -58,16 +59,18 @@ def check_process(proclist):
         return x
   return -1
 
-def getclockturn(dplus, hour, minute):
+def getclockturn(hour, minute):
   ts_start = time.time()
   dtm = datetime.datetime.fromtimestamp(ts_start)
-  dtm_diff = dtm + datetime.timedelta(days=dplus)
-  dtm_off = datetime.datetime(dtm_diff.year, dtm_diff.month, dtm_diff.day, hour, minute, 00)
-  print ('Started at ' + str(dtm))
-  print ('Planned at ' + str(dtm_off))
+  print('Started at ' + str(dtm))
+  if dtm.hour > hour or (dtm.hour == hour and dtm.minute > minute):
+    dtm = dtm + datetime.timedelta(days=1)
+  dtm_off = datetime.datetime(dtm.year, dtm.month, dtm.day, hour, minute, 00)
+  print ('Beep at   ' + str(dtm_off))
   ts_stop = dtm_off.timestamp()
   # print('Seconds left = ' + str(ts_stop - ts_start))
   return int(ts_start), int(ts_stop)
+
 
 class PowerPlan:
   def __init__(self, printGuids=True):
@@ -95,7 +98,7 @@ class PowerPlan:
     self.ready = None not in self.gglist
     if self.guid_active is None:
       self.guid_active = 0 if len(self.gglist) < 2 else 1
-    self.guid_auto = CFG.autoplan
+    self.guid_auto = CFG.index_autoplan
     self.ggcount = len(self.gglist)
 
     if printGuids:
@@ -123,7 +126,9 @@ class PowerPlan:
 
 pp = PowerPlan()
 
-plancolors = [(200, 200, 247), (120,255,120), (255,165,0), (255,0, 0)]
+plancolors =  [(200, 200, 247), (120, 255, 120), (255, 165, 000), (255, 000, 000) ] +\
+              [(255, 0, 255), (255, 0, 170), (255, 0, 50), (200, 255, 100)]
+plancolors = plancolors[:len(CFG.plans)]
 
 guid_images_auto = [ [ ppi.image_up(pc, warn) for pc in plancolors ] for warn in [False, True] ]
 
@@ -135,7 +140,7 @@ guid_images_disabled = [ ppi.image_disabled(warn) for warn in [False, True] ]
 guid_images_poweroff_unsorted = [ ppi.image_timers(pc) for pc in plancolors ]
 guid_images_poweroff = [list(i) for i in zip(*guid_images_poweroff_unsorted)]
 
-timecur, timeoff = getclockturn(1, 0, 30)
+timecur, timeoff = getclockturn(CFG.beeptime[0], CFG.beeptime[1])
 colorcheck = 0
 time2finish = False
 PG_NONE, PG_AUTO, PG_DISABLED = None, -2, -1
@@ -187,7 +192,7 @@ def exec_func():
     if timecur>timeoff and colorcheck==0:
       combo = (1, combo[1], combo[2], combo[3])
       colorcheck = 1
-      winsound.PlaySound('C:\Program Files\PythonPowerPlan\GOSLEEP.wav', winsound.SND_FILENAME)
+      winsound.PlaySound(CFG.beepfile, winsound.SND_FILENAME)
 
     # print(combo)
     if combo != comboprev:
@@ -236,33 +241,33 @@ icon = Icon('PowerPlan')
 icon.icon = ppi.image_unknown(False)
 
 icon.menu = menu(
-                  # item(CFG.namesignal, menu(item()checked=)
+                  # item(CFG.caption_signal, menu(item()checked=)
 
-                  item(CFG.namegames, menu(
+                  item(CFG.caption_games, menu(
                       *(item(CFG.corrapps[a],
                         menu( *(item(CFG.plans[i][1], set_appplan(a, i), checked=get_appplan(a, i), radio=True) \
                                 for i in range(len(CFG.plans))))) for a in range(len(CFG.corrapps)))
                         )),
-                  item(CFG.nameplans, menu(
-                        item(CFG.ignoreplanname, changeplan(PG_DISABLED)),
+                  item(CFG.caption_plans, menu(
+                        item(CFG.caption_ignoreplans, changeplan(PG_DISABLED)),
                         *(item(pp.gglist[i][1], changeplan(i)) for i in range(pp.ggcount)),
-                        item(CFG.autoplanname, changeplan(PG_AUTO))
+                        item(CFG.caption_autoplan, changeplan(PG_AUTO))
                       )),
-                  item(CFG.namepoweroff, menu(
-                      item('Сейчас', set_poweroffpick(PP_OFF), checked=get_poweroffpick(0), radio=True),
-                      *(item(str(poweroff_list[i]) + ' ' + CFG.minutes, set_poweroffpick(i),
+                  item(CFG.caption_poweroff, menu(
+                      item(CFG.caption_now, set_poweroffpick(PP_OFF), checked=get_poweroffpick(0), radio=True),
+                      *(item(str(poweroff_list[i]) + ' ' + CFG.caption_minutes, set_poweroffpick(i),
                              checked=get_poweroffpick(i), radio=True) for i in range(1, len(poweroff_list)))
                   )),
-                  item(CFG.nameexit, lambda: icon.stop()))
+                  item(CFG.caption_exit, lambda: icon.stop()))
 
 exec_thread = threading.Thread(target=exec_func, args=())
 exec_thread.start()
 icon.run()
 
-print ('Exited from icon. waiting for exec_thread finish')
+print ('Terminating... waiting for exec_thread finish')
 time2finish = True
 exec_thread.join(CFG.timestep + 1)
-print ('exec_thread finished.. Good Bye!')
+print ('Terminated. Good Bye!')
 
 # import wmi
 # def check_process(proclist):

@@ -1,10 +1,15 @@
 from PIL import Image, ImageDraw, ImageFont
 # import glob
+# for fn in glob.iglob("c:/Windows/Fonts/*.*"):
+#   try:
+#     ttf = ImageFont.truetype(font=fn)
+#     print("FT {}: {}".format(fn, ttf.getname()))
+#   except Exception as e:
+#     print("XX {}: {}".format(fn, e))
+
+# fnt = ImageFont.truetype('YuGothB.ttc', 12)
 
 w, h, b, f = 19, 20, 3, 4
-# otl = (192,192,192)
-# otl = (102,102,102)
-otl = (0,0,0)
 
 def image_unknown(warn):
   image = Image.new('RGBA', (w, h))
@@ -30,7 +35,7 @@ def image_down(color, warn, bkcolor=(255, 255, 255)):
   if warn:
     dc.rectangle([(0,0), (w-1,h)], fill=(255,100,76))
   dc.polygon([(0, h-1), (4, h-1-h/3), (w-1-4, h-1-h/3), (w-1, h-1)], fill=bkcolor, outline=(0, 0, 0))
-  dc.polygon([(4, h/3+1), (w-1-4, h/3+1), (w-1-4-2, h-1-h/5), (4+2, h-1-h/5)], fill=color, outline=otl)
+  dc.polygon([(4, h/3+1), (w-1-4, h/3+1), (w-1-4-2, h-1-h/5), (4+2, h-1-h/5)], fill=color, outline=(0,0,0))
   return image
 
 def image_disabled(warn):
@@ -42,16 +47,7 @@ def image_disabled(warn):
   dc.polygon([(4, 0), (w-1-4, 0), (w/2, h-1-h/6)], fill=(0,0,0), outline=(255, 255, 255))
   return image
 
-
-# for fn in glob.iglob("c:/Windows/Fonts/*.*"):
-#   try:
-#     ttf = ImageFont.truetype(font=fn)
-#     print("FT {}: {}".format(fn, ttf.getname()))
-#   except Exception as e:
-#     print("XX {}: {}".format(fn, e))
-
 # fnt = ImageFont.truetype('YuGothB.ttc', 12)
-
 fnt = ImageFont.truetype("arial.ttf", 12)
 
 
