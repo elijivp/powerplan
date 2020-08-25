@@ -1,5 +1,5 @@
 # powerplan
-power management for windows (through powercfg shell command) via system tray.
+power management for windows. Autocheck launched apps. Manage via the system tray icon.
 
 Overview:
 
@@ -13,6 +13,7 @@ Main Usage:
 
 #### Requirements:
 Python 3
+
 pip install pystray, psutil, winsound
 #### Install:
 
