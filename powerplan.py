@@ -4,6 +4,7 @@ from pystray import Icon, Menu as menu, MenuItem as item
 import threading
 import configparser
 import time, datetime
+from os import path
 import sys # for path and exit
 import subprocess # for 'call'
 import psutil # for list of processes
@@ -18,26 +19,59 @@ config.optionxform=str
 config.read(sys.path[0] + '\powerplan.cfg') #
 try:
   confgeneral = config['General']
-  CFG.timestep = float(confgeneral['timestep'])
-  if CFG.timestep < 0.1:
-    raise BaseException("Timestep must be greatequal 100ms")
+  CFG.timestep = int(confgeneral['timestep_sec'])
+  if CFG.timestep < 1:
+    raise BaseException("Timestep must be greatequal 1s")
+  try:
+    CFG.powercfg_output_decoder = confgeneral['powercfg_output_decoder']
+    if len(CFG.powercfg_output_decoder) < 2 or CFG.powercfg_output_decoder == 'None':
+      CFG.powercfg_output_decoder = None
+  except BaseException as be:
+    CFG.powercfg_output_decoder = None
   CFG.index_autoplan = int(confgeneral['index_autoplan'])
   CFG.caption_autoplan = confgeneral['caption_autoplan']
   CFG.caption_ignoreplans = confgeneral['caption_ignoreplans']
   CFG.caption_signal = confgeneral['caption_signal']
-  CFG.caption_games = confgeneral['caption_apps']
+  CFG.caption_apps = confgeneral['caption_apps']
   CFG.caption_plans = confgeneral['caption_plans']
   CFG.caption_poweroff = confgeneral['caption_poweroff']
-  CFG.caption_exit = confgeneral['caption_exit']
   CFG.caption_now = confgeneral['caption_now']
   CFG.caption_minutes = confgeneral['caption_minutes']
-  CFG.beeptime = (int(confgeneral['beeptime_hour']), int(confgeneral['beeptime_minute']))
-  CFG.beepfile = sys.path[0] + '\\' + confgeneral['beeptime_wavfile']
+
+  try:
+    CFG.nighttime = (int(confgeneral['night_hour']), int(confgeneral['night_minute']))
+    CFG.nightbeepfile = sys.path[0] + '\\' + confgeneral['night_wavfile']
+    if not path.isfile(CFG.nightbeepfile):
+      print('night_wavfile not found')
+      raise BaseException()
+  except BaseException as be:
+    CFG.nighttime, CFG.nightbeepfile = None, None
 
   CFG.plans = []
   for kk in config['Plans']:
     CFG.plans.append((kk, config['Plans'][kk]))
   plansCount = len(CFG.plans)
+
+  try:
+    confbeep = config['Beep']
+    CFG.beepinterval = int(confbeep['interval_sec'])
+    CFG.beepwav = sys.path[0] + '\\' + confbeep['wavfile']
+    if CFG.beepwav == '' or not path.isfile(CFG.beepwav):
+      print('BEEP wavfile not found')
+      raise BaseException()
+    try:
+      CFG.caption_beep = confgeneral['caption_beep']
+    except BaseException as be:
+      CFG.caption_beep = None
+  except BaseException as be:
+    CFG.beepinterval = 10000000
+    CFG.beepwav = None
+    CFG.caption_beep = None
+
+  try:
+    CFG.caption_exit = confgeneral['caption_exit']
+  except BaseException as be:
+    CFG.caption_exit = None
 
   CFG.corrapps = []
   CFG.corrplans = []
@@ -59,41 +93,50 @@ def check_process(proclist):
         return x
   return -1
 
+
+def getclock():
+  return int(time.time())
+
 def getclockturn(hour, minute):
-  ts_start = time.time()
-  dtm = datetime.datetime.fromtimestamp(ts_start)
+  dtm = datetime.datetime.fromtimestamp(time.time())
   print('Started at ' + str(dtm))
   if dtm.hour > hour or (dtm.hour == hour and dtm.minute > minute):
     dtm = dtm + datetime.timedelta(days=1)
   dtm_off = datetime.datetime(dtm.year, dtm.month, dtm.day, hour, minute, 00)
-  print ('Beep at   ' + str(dtm_off))
+  print ('Night at   ' + str(dtm_off))
   ts_stop = dtm_off.timestamp()
   # print('Seconds left = ' + str(ts_stop - ts_start))
-  return int(ts_start), int(ts_stop)
+  return int(ts_stop)
 
 
 class PowerPlan:
   def __init__(self, printGuids=True):
-    len_pfx, len_guid = len('GUID схемы питания: '), 36
+    len_guid = 36
     output = subprocess.check_output(["powercfg", "-list"])
-    lines = str(output.decode('cp866')).split('\n')
+    if CFG.powercfg_output_decoder is not None:
+      output = output.decode(CFG.powercfg_output_decoder)
+    lines = str(output).split('\n')
 
     self.guid_active = None
     self.gglist = [None for _p in CFG.plans]
 
     for l in lines:
-      if l.startswith('GUID'):
-        guid = l[len_pfx:len_pfx + len_guid]
-        lost = l[len_pfx + len_guid + 3:]
-        # print ('Guid: %s; lost: %s' % (guid, lost))
-        ctr = 0
-        for p in CFG.plans:
-          if lost.startswith(p[0]):
-            self.gglist[ctr] = ((guid, p[1]))
-            if '*' in lost:
-              self.guid_active = ctr
-            break
-          ctr += 1
+      ldl = l.split(': ')   # Thats main delimiter for parsing 'powercfg -list' output. 'GUID' in left part, GUID in right
+      if len(ldl) != 2:
+        continue
+      if ldl[0].count('GUID') == 0:
+        continue
+      guid = ldl[1][:len_guid]
+      lost = ldl[1][len_guid + 3:]
+      # print ('Guid: %s; lost: %s' % (guid, lost))
+      ctr = 0
+      for p in CFG.plans:
+        if lost.startswith(p[0]):
+          self.gglist[ctr] = ((guid, p[1]))
+          if '*' in lost:
+            self.guid_active = ctr
+          break
+        ctr += 1
 
     self.ready = None not in self.gglist
     if self.guid_active is None:
@@ -140,8 +183,12 @@ guid_images_disabled = [ ppi.image_disabled(warn) for warn in [False, True] ]
 guid_images_poweroff_unsorted = [ ppi.image_timers(pc) for pc in plancolors ]
 guid_images_poweroff = [list(i) for i in zip(*guid_images_poweroff_unsorted)]
 
-timecur, timeoff = getclockturn(CFG.beeptime[0], CFG.beeptime[1])
-colorcheck = 0
+time_current = getclock()
+if CFG.nighttime is not None:
+  time_night = getclockturn(CFG.nighttime[0], CFG.nighttime[1])
+else:
+  time_night = None
+
 time2finish = False
 PG_NONE, PG_AUTO, PG_DISABLED = None, -2, -1
 pick_guid = PG_AUTO
@@ -149,17 +196,22 @@ pick_guid = PG_AUTO
 PP_NONE, PP_OFF = -2, -1
 pick_poweroff = PP_NONE
 poweroff_list = [ 0, 5, 10, 15, 20, 25, 30, 45, 60, 90, 120 ]
+PB_MANUAL, PB_NONE = -2, -1
+pick_beep = PB_MANUAL
+beeps_list = [0, 1, 5, 10, 15, 30, 60, 90, 120]
 
 def exec_func():
   time.sleep(0.5)
-  global timecur, timeoff, time2finish
-  global pick_poweroff, pick_guid
-  global colorcheck
+  global time_current, time_night, time2finish
+  global pick_poweroff, pick_guid, pick_beep
+  global night_check
   poweroff_timer, poweroff_change, poweroff_doit = None, 0, False
+  beepcounter = int(0)
+  beepinterval = CFG.beepinterval
   maxpif = len(guid_images_poweroff)-1
 
-  combo = (0, None, False, pp.guid_active)    # overtime, poweroff_time, MODE (disabled/auto/manual), guid
-  comboprev = None #combo
+  combo = (0, None, False, pp.guid_active)  # overtime, poweroff_time, MODE (disabled/auto/manual), guid
+  comboprev = None
 
   while not time2finish:
 
@@ -168,9 +220,13 @@ def exec_func():
         combo = (combo[0], None, combo[2], combo[3])
         poweroff_timer = -1
       else:
-        poweroff_timer = 0 if pick_poweroff == 0 else poweroff_list[pick_poweroff]*60 - 1
-        # combo = (combo[0], min(int(poweroff_timer/60), len(guid_images_poweroff)-1), combo[2], combo[3])
+        poweroff_timer = 0 if pick_poweroff == 0 else poweroff_list[pick_poweroff]*60
       pick_poweroff = PP_NONE
+
+    if pick_beep >= 0:
+      beepcounter = 0
+      beepinterval = beeps_list[pick_beep] * 60
+      pick_beep = PB_NONE
 
     if poweroff_timer is not None:
       if poweroff_timer <= 0:
@@ -189,10 +245,11 @@ def exec_func():
         combo = (combo[0], combo[1], False, pick_guid)
       pick_guid = PG_NONE
 
-    if timecur>timeoff and colorcheck==0:
-      combo = (1, combo[1], combo[2], combo[3])
-      colorcheck = 1
-      winsound.PlaySound(CFG.beepfile, winsound.SND_FILENAME)
+    if time_night is not None:
+      if time_current > time_night:
+        combo = (1, combo[1], combo[2], combo[3])
+        time_night = None
+        winsound.PlaySound(CFG.nightbeepfile, winsound.SND_FILENAME)
 
     # print(combo)
     if combo != comboprev:
@@ -206,7 +263,13 @@ def exec_func():
       comboprev = combo
 
     time.sleep(CFG.timestep)
-    timecur += CFG.timestep
+    time_current += CFG.timestep
+
+    beepcounter += CFG.timestep
+    if beepcounter >= beepinterval:
+      if poweroff_timer is None:
+        winsound.PlaySound(CFG.beepwav, winsound.SND_FILENAME)
+      beepcounter = 0
 
   if poweroff_doit:
     subprocess.call("shutdown -s -t 00")
@@ -220,6 +283,16 @@ def set_poweroffpick(tm):
 def get_poweroffpick(v):
   def func(item):
     return pick_poweroff == v
+  return func
+
+def set_beep(tm):
+  def func(icon, item):
+    global pick_beep
+    pick_beep = -1 if pick_beep == tm else tm
+  return func
+def get_beep(v):
+  def func(item):
+    return pick_beep == v
   return func
 
 def changeplan(guid):
@@ -240,25 +313,38 @@ def get_appplan(idx, df):
 icon = Icon('PowerPlan')
 icon.icon = ppi.image_unknown(False)
 
-icon.menu = menu(
-                  # item(CFG.caption_signal, menu(item()checked=)
-
-                  item(CFG.caption_games, menu(
+item_apps =       item(CFG.caption_apps, menu(
                       *(item(CFG.corrapps[a],
                         menu( *(item(CFG.plans[i][1], set_appplan(a, i), checked=get_appplan(a, i), radio=True) \
                                 for i in range(len(CFG.plans))))) for a in range(len(CFG.corrapps)))
-                        )),
-                  item(CFG.caption_plans, menu(
+                        ))
+
+item_plans =      item(CFG.caption_plans, menu(
                         item(CFG.caption_ignoreplans, changeplan(PG_DISABLED)),
                         *(item(pp.gglist[i][1], changeplan(i)) for i in range(pp.ggcount)),
                         item(CFG.caption_autoplan, changeplan(PG_AUTO))
-                      )),
-                  item(CFG.caption_poweroff, menu(
+                      ))
+
+item_poweroff =   item(CFG.caption_poweroff, menu(
                       item(CFG.caption_now, set_poweroffpick(PP_OFF), checked=get_poweroffpick(0), radio=True),
                       *(item(str(poweroff_list[i]) + ' ' + CFG.caption_minutes, set_poweroffpick(i),
                              checked=get_poweroffpick(i), radio=True) for i in range(1, len(poweroff_list)))
-                  )),
-                  item(CFG.caption_exit, lambda: icon.stop()))
+                  ))
+
+item_beep = None if CFG.caption_beep is None else item(CFG.caption_beep, menu(
+                      *(item(str(beeps_list[i]) + ' ' + CFG.caption_minutes, set_beep(i),
+                             checked=get_beep(i), radio=True) for i in range(1, len(beeps_list)))
+                  ))
+
+item_exit = None if CFG.caption_exit is None else item(CFG.caption_exit, lambda: icon.stop())
+
+itemlist = [item_apps, item_plans]
+if item_beep is not None:
+  itemlist.append(item_beep)
+if item_exit is not None:
+  itemlist.append(item_exit)
+
+icon.menu = menu(*itemlist)
 
 exec_thread = threading.Thread(target=exec_func, args=())
 exec_thread.start()

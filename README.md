@@ -12,8 +12,11 @@ Main Usage:
 ![MainUsage](readmeimage2.png)
 
 #### Requirements:
+
 Python 3
+
 pip install pystray, psutil, winsound
+
 #### Install:
 
 A. List existing power schemas by call:```powercfg -list ``` in cmd shell or Windows PowerShell. Check schema names.
@@ -34,6 +37,8 @@ D. Main call through pythonw:
 Test autoswitch of schemas by launching and stopping application, specified on [Applications] section.
 
 E. Open windows scheduler, create new task with trigger: logon, and action: start program from previous step.
+
+F. A lot of info in powerplan.cfg file
 
 #### Config example:
 powercfg -list:
