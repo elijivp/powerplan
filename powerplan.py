@@ -39,6 +39,15 @@ try:
   CFG.caption_minutes = confgeneral['caption_minutes']
 
   try:
+    CFG.warntime = (int(confgeneral['warning_hour']), int(confgeneral['warning_minute']))
+    CFG.warnbeepfile = sys.path[0] + '\\' + confgeneral['warning_wavfile']
+    if not path.isfile(CFG.warnbeepfile):
+      print('warning_wavfile not found')
+      raise BaseException()
+  except BaseException as be:
+    CFG.warntime, CFG.warnbeepfile = None, None
+
+  try:
     CFG.nighttime = (int(confgeneral['night_hour']), int(confgeneral['night_minute']))
     CFG.nightbeepfile = sys.path[0] + '\\' + confgeneral['night_wavfile']
     if not path.isfile(CFG.nightbeepfile):
@@ -99,11 +108,10 @@ def getclock():
 
 def getclockturn(hour, minute):
   dtm = datetime.datetime.fromtimestamp(time.time())
-  print('Started at ' + str(dtm))
   if dtm.hour > hour or (dtm.hour == hour and dtm.minute > minute):
     dtm = dtm + datetime.timedelta(days=1)
   dtm_off = datetime.datetime(dtm.year, dtm.month, dtm.day, hour, minute, 00)
-  print ('Night at   ' + str(dtm_off))
+  print ('GCT   ' + str(dtm_off))
   ts_stop = dtm_off.timestamp()
   # print('Seconds left = ' + str(ts_stop - ts_start))
   return int(ts_stop)
@@ -184,10 +192,10 @@ guid_images_poweroff_unsorted = [ ppi.image_timers(pc) for pc in plancolors ]
 guid_images_poweroff = [list(i) for i in zip(*guid_images_poweroff_unsorted)]
 
 time_current = getclock()
-if CFG.nighttime is not None:
-  time_night = getclockturn(CFG.nighttime[0], CFG.nighttime[1])
-else:
-  time_night = None
+print('Tick start: ' + str(time_current))
+time_warn = None if CFG.warntime is None else getclockturn(CFG.warntime[0], CFG.warntime[1])
+time_night = None if CFG.nighttime is None else getclockturn(CFG.nighttime[0], CFG.nighttime[1])
+print('Tick-Beep-Warn): ' + str(time_warn) + '; Tick-Beep-Night: ' + str(time_night))
 
 time2finish = False
 PG_NONE, PG_AUTO, PG_DISABLED = None, -2, -1
@@ -202,7 +210,7 @@ beeps_list = [0, 1, 5, 10, 15, 30, 60, 90, 120]
 
 def exec_func():
   time.sleep(0.5)
-  global time_current, time_night, time2finish
+  global time_current, time_warn, time_night, time2finish
   global pick_poweroff, pick_guid, pick_beep
   global night_check
   poweroff_timer, poweroff_change, poweroff_doit = None, 0, False
@@ -222,6 +230,8 @@ def exec_func():
       else:
         poweroff_timer = 0 if pick_poweroff == 0 else poweroff_list[pick_poweroff]*60
       pick_poweroff = PP_NONE
+      time_warn = None
+      time_night = None
 
     if pick_beep >= 0:
       beepcounter = 0
@@ -245,11 +255,13 @@ def exec_func():
         combo = (combo[0], combo[1], False, pick_guid)
       pick_guid = PG_NONE
 
-    if time_night is not None:
-      if time_current > time_night:
-        combo = (1, combo[1], combo[2], combo[3])
-        time_night = None
-        winsound.PlaySound(CFG.nightbeepfile, winsound.SND_FILENAME)
+    if time_warn is not None and time_current > time_warn:
+      combo = (1, combo[1], combo[2], combo[3])
+      time_warn = None
+      winsound.PlaySound(CFG.warnbeepfile, winsound.SND_FILENAME)
+    if time_night is not None and time_current > time_night:
+      time_night = None
+      winsound.PlaySound(CFG.nightbeepfile, winsound.SND_FILENAME)
 
     # print(combo)
     if combo != comboprev:
