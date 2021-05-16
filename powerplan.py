@@ -350,9 +350,12 @@ item_beep = None if CFG.caption_beep is None else item(CFG.caption_beep, menu(
 
 item_exit = None if CFG.caption_exit is None else item(CFG.caption_exit, lambda: icon.stop())
 
-itemlist = [item_apps, item_plans, item_poweroff]
+itemlist = []
 if item_beep is not None:
   itemlist.append(item_beep)
+itemlist.append(item_apps)
+itemlist.append(item_plans)
+itemlist.append(item_poweroff)
 if item_exit is not None:
   itemlist.append(item_exit)
 
